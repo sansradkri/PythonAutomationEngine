@@ -3,10 +3,9 @@ name: Run Automation Scripts
 on:
   workflow_dispatch:
     inputs:
-      api_url:
-        description: 'API URL to save results'
+      script_name:
+        description: 'The name of the script to execute'
         required: true
-        default: 'http://localhost:5000/save_script_result'
 
 jobs:
   run-scripts:
@@ -24,25 +23,22 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flask flask_sqlalchemy psycopg2 requests
+          pip install fastapi uvicorn sqlalchemy psycopg2 requests
 
-      - name: Run automation scripts
+      - name: Run script
         run: |
-          scripts=$(ls scripts)
-          for script in $scripts; do
-            start_time=$(date +%s)
-            python scripts/$script
-            status=$?
-            end_time=$(date +%s)
-            duration=$(( (end_time - start_time) / 60 ))
-            result_status="success"
-            if [ $status -ne 0 ]; then
-              result_status="failed"
-            fi
-            curl -X POST ${{ github.event.inputs.api_url }} -H "Content-Type: application/json" -d '{
-              "script_name": "'$script'",
-              "trigger_time": "'$(date --iso-8601=seconds)'",
-              "duration_minutes": '$duration',
-              "result_status": "'$result_status'"
-            }'
-          done
+          start_time=$(date +%s)
+          python scripts/${{ github.event.inputs.script_name }}
+          status=$?
+          end_time=$(date +%s)
+          duration=$(( (end_time - start_time) / 60 ))
+          result_status="success"
+          if [ $status -ne 0 ]; then
+            result_status="failed"
+          fi
+          curl -X POST ${{ secrets.API_URL }} -H "Content-Type: application/json" -d '{
+            "script_name": "${{ github.event.inputs.script_name }}",
+            "trigger_time": "'$(date --iso-8601=seconds)'",
+            "duration_minutes": '$duration',
+            "result_status": "'$result_status'"
+          }'
