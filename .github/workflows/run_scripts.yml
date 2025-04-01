@@ -1,0 +1,48 @@
+name: Run Automation Scripts
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL to save results'
+        required: true
+        default: 'http://localhost:5000/save_script_result'
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask flask_sqlalchemy psycopg2 requests
+
+      - name: Run automation scripts
+        run: |
+          scripts=$(ls scripts)
+          for script in $scripts; do
+            start_time=$(date +%s)
+            python scripts/$script
+            status=$?
+            end_time=$(date +%s)
+            duration=$(( (end_time - start_time) / 60 ))
+            result_status="success"
+            if [ $status -ne 0 ]; then
+              result_status="failed"
+            fi
+            curl -X POST ${{ github.event.inputs.api_url }} -H "Content-Type: application/json" -d '{
+              "script_name": "'$script'",
+              "trigger_time": "'$(date --iso-8601=seconds)'",
+              "duration_minutes": '$duration',
+              "result_status": "'$result_status'"
+            }'
+          done
